@@ -216,11 +216,12 @@ const Cart = (() => {
       // − на сторінці кошика
       const cartMinus = e.target.closest('.cart-minus');
       if (cartMinus) {
-        const productId = parseInt(cartMinus.dataset.product);
-        const input     = document.getElementById(`cart-qty-${productId}`);
+        const productId  = parseInt(cartMinus.dataset.product);
+        const input      = document.getElementById(`cart-qty-${productId}`);
         if (input) {
-          const newQty = Math.max(0, parseInt(input.value) - 1);
-          input.value = newQty;
+          const current = parseInt(input.value) || 1;
+          const newQty  = Math.max(1, current - 1); // мінімум 1 (для видалення — кнопка trash)
+          input.value   = newQty;
           updateCartQty(productId, newQty);
         }
         return;
@@ -229,25 +230,31 @@ const Cart = (() => {
       // + на сторінці кошика
       const cartPlus = e.target.closest('.cart-plus');
       if (cartPlus) {
-        const productId = parseInt(cartPlus.dataset.product);
-        const input     = document.getElementById(`cart-qty-${productId}`);
+        const productId  = parseInt(cartPlus.dataset.product);
+        const input      = document.getElementById(`cart-qty-${productId}`);
         if (input) {
-          const newQty = Math.min(99, parseInt(input.value) + 1);
-          input.value = newQty;
+          const current = parseInt(input.value) || 1;
+          const newQty  = Math.min(99, current + 1);
+          input.value   = newQty;
           updateCartQty(productId, newQty);
         }
         return;
       }
     });
 
-    // Зміна кількості вручну (input на сторінці кошика)
-    document.addEventListener('change', e => {
-      if (e.target.classList.contains('qty-input')) {
-        const productId = parseInt(e.target.dataset.product);
-        const qty       = Math.min(99, Math.max(0, parseInt(e.target.value) || 0));
-        e.target.value  = qty;
+    // Зміна кількості вручну (input) — debounce 500ms
+    let qtyDebounceTimers = {};
+    document.addEventListener('input', e => {
+      if (!e.target.classList.contains('qty-input')) return;
+      const input     = e.target;
+      const productId = parseInt(input.dataset.product);
+
+      clearTimeout(qtyDebounceTimers[productId]);
+      qtyDebounceTimers[productId] = setTimeout(() => {
+        const qty = Math.min(99, Math.max(1, parseInt(input.value) || 1)); // мінімум 1
+        input.value = qty;
         updateCartQty(productId, qty);
-      }
+      }, 500);
     });
 
     // Очистити кошик
@@ -268,3 +275,19 @@ const Cart = (() => {
 })();
 
 document.addEventListener('DOMContentLoaded', () => Cart.init());
+
+// ── User menu dropdown ─────────────────────────────────────────
+(function () {
+  const toggle = document.getElementById('userMenuToggle');
+  const dropdown = document.getElementById('userDropdown');
+  if (!toggle || !dropdown) return;
+
+  toggle.addEventListener('click', function (e) {
+    e.stopPropagation();
+    dropdown.classList.toggle('open');
+  });
+
+  document.addEventListener('click', function () {
+    dropdown.classList.remove('open');
+  });
+})();

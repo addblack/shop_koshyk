@@ -5,24 +5,27 @@ namespace App\Http\Controllers\Shop;
 use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\User;
 use App\Services\CartService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 
 class CartController extends Controller
 {
     public function __construct(private CartService $cart) {}
 
-    /** GET /cart — сторінка кошика */
+    /** GET /cart */
     public function index()
     {
         $items = $this->cart->items();
         $total = $this->cart->total();
-
         return view('shop.cart', compact('items', 'total'));
     }
 
-    /** POST /cart/add — AJAX додавання */
+    /** POST /cart/add — AJAX */
     public function add(Request $request): JsonResponse
     {
         $request->validate([
@@ -36,10 +39,10 @@ class CartController extends Controller
         );
 
         return response()->json([
-            'success'   => true,
-            'message'   => 'Товар додано до кошика',
-            'cart_count'=> $this->cart->totalQty(),
-            'cart_total'=> number_format($this->cart->total(), 2),
+            'success'    => true,
+            'message'    => 'Товар додано до кошика',
+            'cart_count' => $this->cart->totalQty(),
+            'cart_total' => number_format($this->cart->total(), 2),
             'item' => [
                 'id'       => $item->id,
                 'qty'      => $item->quantity,
@@ -48,7 +51,7 @@ class CartController extends Controller
         ]);
     }
 
-    /** PATCH /cart/update — AJAX оновлення кількості */
+    /** PATCH /cart/update — AJAX */
     public function update(Request $request): JsonResponse
     {
         $request->validate([
@@ -70,11 +73,10 @@ class CartController extends Controller
         ]);
     }
 
-    /** DELETE /cart/remove — AJAX видалення */
+    /** DELETE /cart/remove — AJAX */
     public function remove(Request $request): JsonResponse
     {
         $request->validate(['product_id' => 'required|exists:products,id']);
-
         $this->cart->remove($request->integer('product_id'));
 
         return response()->json([
@@ -85,7 +87,7 @@ class CartController extends Controller
         ]);
     }
 
-    /** GET /cart/mini — AJAX мінікошик (для хедера) */
+    /** GET /cart/mini — AJAX */
     public function mini(): JsonResponse
     {
         $items = $this->cart->items();
@@ -98,7 +100,7 @@ class CartController extends Controller
         ]);
     }
 
-    /** POST /cart/checkout — оформлення замовлення */
+    /** POST /cart/checkout */
     public function checkout(Request $request)
     {
         $request->validate([
@@ -110,12 +112,35 @@ class CartController extends Controller
         ]);
 
         $items = $this->cart->items();
-
         if ($items->isEmpty()) {
             return back()->withErrors(['cart' => 'Кошик порожній']);
         }
 
+        // Знайти або автоматично створити акаунт
+        $user = Auth::user();
+        $newAccountCreated = false;
+        $autoPassword = null;
+
+        if (!$user && $request->email) {
+            $existingUser = User::where('email', $request->email)->first();
+
+            if ($existingUser) {
+                $user = $existingUser;
+            } else {
+                $autoPassword = Str::random(10);
+                $user = User::create([
+                    'name'     => $request->name,
+                    'email'    => $request->email,
+                    'password' => Hash::make($autoPassword),
+                ]);
+                Auth::login($user);
+                $request->session()->regenerate();
+                $newAccountCreated = true;
+            }
+        }
+
         $order = Order::create([
+            'user_id'    => $user?->id,
             'session_id' => session()->getId(),
             'name'       => $request->name,
             'phone'      => $request->phone,
@@ -138,7 +163,9 @@ class CartController extends Controller
         $this->cart->clear();
 
         return redirect()->route('shop.order-success', $order)
-            ->with('success', "Замовлення #{$order->id} успішно оформлено!");
+            ->with('success', "Замовлення #{$order->id} успішно оформлено!")
+            ->with('new_account_created', $newAccountCreated)
+            ->with('auto_password', $autoPassword);
     }
 
     /** GET /cart/success/{order} */

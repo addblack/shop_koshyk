@@ -85,7 +85,7 @@
                 <h3>Підсумок замовлення</h3>
                 <div class="cart-summary__row">
                     <span>Кількість товарів:</span>
-                    <span id="summaryCount">{{ $items->count() }}</span>
+                    <span id="summaryCount">{{ $cart->totalQty() }}</span>
                 </div>
                 <div class="cart-summary__row cart-summary__row--total">
                     <span>До сплати:</span>

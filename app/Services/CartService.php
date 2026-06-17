@@ -9,17 +9,16 @@ use Illuminate\Support\Facades\Session;
 
 class CartService
 {
-    private string $sessionId;
-
-    public function __construct()
+    /** Session ID отримуємо щоразу свіжий, щоб не зберігати застарілий */
+    private function sid(): string
     {
-        $this->sessionId = Session::getId();
+        return Session::getId();
     }
 
     /** Усі позиції кошика з підвантаженими продуктами */
     public function items(): Collection
     {
-        return CartItem::where('session_id', $this->sessionId)
+        return CartItem::where('session_id', $this->sid())
             ->with('product.category')
             ->get();
     }
@@ -27,13 +26,13 @@ class CartService
     /** Кількість унікальних позицій */
     public function count(): int
     {
-        return CartItem::where('session_id', $this->sessionId)->count();
+        return CartItem::where('session_id', $this->sid())->count();
     }
 
     /** Загальна кількість одиниць товарів */
     public function totalQty(): int
     {
-        return (int) CartItem::where('session_id', $this->sessionId)->sum('quantity');
+        return (int) CartItem::where('session_id', $this->sid())->sum('quantity');
     }
 
     /** Загальна сума */
@@ -46,7 +45,7 @@ class CartService
     public function add(int $productId, int $qty = 1): CartItem
     {
         $item = CartItem::firstOrCreate(
-            ['session_id' => $this->sessionId, 'product_id' => $productId],
+            ['session_id' => $this->sid(), 'product_id' => $productId],
             ['quantity' => 0]
         );
         $item->increment('quantity', $qty);
@@ -62,9 +61,12 @@ class CartService
             return null;
         }
 
-        $item = CartItem::where('session_id', $this->sessionId)
+        $item = CartItem::where('session_id', $this->sid())
             ->where('product_id', $productId)
-            ->firstOrFail();
+            ->first();
+
+        if (!$item) return null;
+
         $item->update(['quantity' => $qty]);
         return $item->fresh('product');
     }
@@ -72,7 +74,7 @@ class CartService
     /** Видалити позицію */
     public function remove(int $productId): void
     {
-        CartItem::where('session_id', $this->sessionId)
+        CartItem::where('session_id', $this->sid())
             ->where('product_id', $productId)
             ->delete();
     }
@@ -80,6 +82,6 @@ class CartService
     /** Очистити кошик */
     public function clear(): void
     {
-        CartItem::where('session_id', $this->sessionId)->delete();
+        CartItem::where('session_id', $this->sid())->delete();
     }
 }
